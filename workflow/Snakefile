@@ -1,0 +1,317 @@
+# Snakemake workflow for phased mapping with pairtools
+# Juan Caballero
+# (C) 2024
+
+import yaml
+
+wildcard_constraints: sample=r".+\d+"
+
+# some subroutines needed
+def dump_config_to_yaml(config):
+    output_file = "run_config.yaml"
+    with open(output_file, 'w') as configfile:
+        yaml.dump(config, configfile)
+
+# setting configurations
+configfile: "config.yaml"
+fastq_dir = str(config['fastq_dir'])
+
+# before running the process
+onstart:
+    print("\n==== Variant calling pipeline starts ====")
+    print("Configuration:")
+    print(config)
+    print("=" * 80)
+    print()
+    dump_config_to_yaml(config)
+
+# main workflow
+rule all:
+    input:
+        expand("07_multiqc/{sample}/multiqc_report.html", sample=config["samples"]) 
+
+rule fastp:
+    input:
+        fq1 = str(fastq_dir) + "/{sample}_1.fastq.gz",
+        fq2 = str(fastq_dir) + "/{sample}_2.fastq.gz"
+    output:
+        trim_fq1 = "01_preprocessing/{sample}_1.fastq.gz",
+        trim_fq2 = "01_preprocessing/{sample}_2.fastq.gz",
+        html_rep = "01_preprocessing/{sample}_report.html",
+        json_rep = "01_preprocessing/{sample}_report.json"
+    threads: 10
+    log:
+        "logs/fastp/{sample}.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        fastp \
+            -w {threads} \
+            -i {input.fq1} \
+            -I {input.fq2} \
+            -o {output.trim_fq1} \
+            -O {output.trim_fq2} \
+            -h {output.html_rep} \
+            -j {output.json_rep}
+        """
+
+rule diplod_genome:
+    input:
+        genome = str(config["genome"]),
+        vcf = str(config["variants"])
+    output:
+        genome = "02_diplod_genome/diplod_genome.fa.gz"
+    threads: 1
+    params:
+        hap1 = config["hap_1"],
+        hap2 = config["hap_2"]
+    log:
+        "logs/bcftools/diplod_genome.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        bcftools consensus \
+            --fasta-ref {input.genome} \
+            --haplotype 1 {input.vcf} \
+            --sample {params.hap1} \
+            | sed -E 's/(>[^[:space:]]+).*/\\1_hap1/g' \
+            | bgzip -c > genome_hap1.fa.gz
+
+        bcftools consensus \
+            --fasta-ref {input.genome} \
+            --haplotype 1 {input.vcf} \
+            --sample {params.hap2} \
+            | sed -E 's/(>[^[:space:]]+).*/\\1_hap2/g' \
+            | bgzip -c > genome_hap2.fa.gz
+
+        cat genome_hap1.fa.gz genome_hap2.fa.gz \
+            > {output.genome}
+
+        rm genome_hap1.fa.gz genome_hap2.fa.gz
+        """
+
+rule index_diploid_genome:
+    input:
+        genome = "02_diplod_genome/diplod_genome.fa.gz"
+    output:
+        index = "02_diplod_genome/diplod_genome.fa.gz.bwt"
+    threads: 1
+    log:
+        "logs/bwa/index.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        bwa index {input.genome}
+        """
+
+rule chr_sizes:
+    input:
+        genome = "02_diplod_genome/diplod_genome.fa.gz"
+    output:
+        chr_sizes = "02_diplod_genome/diplod_genome.chromsizes"
+    threads: 1
+    log:
+        "logs/faidx/chr_sizes.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        samtools faidx {input.genome}
+        cut -f1,2 {input.genome}.fai > {output.chr_sizes}
+        """
+
+rule bwa_mapping:
+    input:
+        fq1 = "01_preprocessing/{sample}_1.fastq.gz",
+        fq2 = "01_preprocessing/{sample}_2.fastq.gz",
+        genome = "02_diplod_genome/diplod_genome.fa.gz",
+        index = "02_diplod_genome/diplod_genome.fa.gz.bwt"
+    output:
+        bam = "03_mapping/{sample}.bam"
+    threads: 10
+    log:
+        "logs/bwa/align_{sample}.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        bwa mem \
+            -SP \
+            -t {threads} \
+            {input.genome} \
+            {input.fq1} \
+            {input.fq2} \
+        | samtools view -@ 2 -b \
+        > {output.bam}
+        """
+
+rule pairtools_parse:
+    input:
+        bam = "03_mapping/{sample}.bam",
+        chr_sizes = "02_diplod_genome/diplod_genome.chromsizes"
+    output:
+        pairs = "04_pairing/{sample}_unphased_XA.pairs.gz"
+    params:
+        par = config['pairtools_parse_params']
+    threads: 1
+    log:
+        "logs/pairtools/parse_{sample}.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        pairtools parse \
+            {params.par} \
+            -c {input.chr_sizes} \
+            {input.bam} \
+            -o {output.pairs}
+        """
+
+rule pairtools_phase:
+    input:
+        pairs = "04_pairing/{sample}_unphased_XA.pairs.gz"
+    output:
+        pairs = "04_pairing/{sample}_phased_XA.pairs.gz"
+    threads: 1
+    log:
+        "logs/pairtools/phase_{sample}.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        pairtools phase \
+            --phase-suffixes _hap1 _hap2 \
+            --tag-mode XA \
+            --clean-output \
+            {input.pairs} -o {output.pairs}
+
+        """
+
+rule pairtools_sort:
+    input:
+        pairs = "04_pairing/{sample}_phased_XA.pairs.gz"
+    output:
+        pairs = "04_pairing/{sample}_phased_sorted_XA.pairs.gz"
+    threads: 10
+    log:
+        "logs/pairtools/sort_{sample}.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        pairtools sort \
+            {input.pairs} \
+            --nproc {threads} \
+            -o {output.pairs}
+        """
+
+rule pairtools_dedup:
+    input:
+        pairs = "04_pairing/{sample}_phased_sorted_XA.pairs.gz"
+    output:
+        pairs = "04_pairing/{sample}_dedup_XA.pairs.gz",
+        stats = "04_pairing/{sample}_dedup_XA.stats"
+    threads: 1
+    log:
+        "logs/pairtools/dedup_{sample}.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        pairtools dedup \
+            --mark-dups \
+            --extra-col-pair phase1 phase2 \
+            --output-dups - \
+            --output-unmapped - \
+            --output-stats {output.stats} \
+            -o {output.pairs} \
+            {input.pairs}
+        """
+
+rule pairtools_filter:
+    input:
+        pairs = "04_pairing/{sample}_dedup_XA.pairs.gz"
+    output:
+        pairs0 = "05_filter/{sample}_phases_XA_phase0.pairs.gz",
+        pairs1 = "05_filter/{sample}_phases_XA_phase1.pairs.gz",
+        pairsU = "05_filter/{sample}_phases_XA_unphased.pairs.gz",
+        pairsT = "05_filter/{sample}_phases_XA_trans.pairs.gz"       
+    threads: 1
+    log:
+        "logs/pairtools/stats_{sample}.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        pairtools select \
+            '(phase1=="0") and (phase2=="0")' \
+            {input.pairs} \
+            -o {output.pairs0}
+
+        pairtools select \
+            '(phase1=="1") and (phase2=="1")' \
+            {input.pairs} \
+            -o {output.pairs1}
+        
+        pairtools select \
+            '(phase1==".") or (phase2==".")' \
+            {input.pairs} \
+            -o {output.pairsU}
+
+        pairtools select \
+            '(phase1!=phase2) and (phase1!=".") and (phase2!=".") and (phase1!="!") and (phase2!="!")' \
+            {input.pairs} \
+            -o {output.pairsT}
+        """
+
+rule pairtools_stats:
+    input:
+        pairs0 = "05_filter/{sample}_phases_XA_phase0.pairs.gz",
+        pairs1 = "05_filter/{sample}_phases_XA_phase1.pairs.gz",
+        pairsU = "05_filter/{sample}_phases_XA_unphased.pairs.gz",
+        pairsT = "05_filter/{sample}_phases_XA_trans.pairs.gz"
+    output:
+        stats0 = "06_stats/{sample}_phases_XA_phase0.stats",
+        stats1 = "06_stats/{sample}_phases_XA_phase1.stats",
+        statsU = "06_stats/{sample}_phases_XA_unphased.stats",
+        statsT = "06_stats/{sample}_phases_XA_trans.stats"
+    threads: 1
+    log:
+        "logs/pairtools/stats_{sample}.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        pairtools stats {input.pairs0} -o {output.stats0}
+        pairtools stats {input.pairs1} -o {output.stats1}
+        pairtools stats {input.pairsU} -o {output.statsU}
+        pairtools stats {input.pairsT} -o {output.statsT}
+        """
+
+rule multiqc:
+    input:
+        stats0 = "06_stats/{sample}_phases_XA_phase0.stats",
+        stats1 = "06_stats/{sample}_phases_XA_phase1.stats",
+        statsU = "06_stats/{sample}_phases_XA_unphased.stats",
+        statsT = "06_stats/{sample}_phases_XA_trans.stats"
+    output:
+        dir = directory("07_multiqc/{sample}"),
+        html = "07_multiqc/{sample}/multiqc_report.html"
+    threads: 1
+    log:
+        "logs/multiqc/{sample}.log"
+    conda:
+        "pairtools_phased"
+    shell:
+        """
+        multiqc \
+            --module pairtools \
+            -o {output.dir} \
+            06_stats/
+        """
+
+onsuccess:
+    print("\n==== Workflow finished successfully! ====\n")
