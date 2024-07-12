@@ -15,7 +15,6 @@ def dump_config_to_yaml(config):
 # setting configurations
 configfile: "config.yaml"
 fastq_dir = str(config['fastq_dir'])
-
 # before running the process
 onstart:
     print("\n==== Variant calling pipeline starts ====")
@@ -32,18 +31,14 @@ rule all:
 
 rule fastp:
     input:
-        fq1 = str(fastq_dir) + "/{sample}_1.fastq.gz",
-        fq2 = str(fastq_dir) + "/{sample}_2.fastq.gz"
+        fq1 = str(fastq_dir) + "/{sample}_R1.fastq.gz",
+        fq2 = str(fastq_dir) + "/{sample}_R2.fastq.gz"
     output:
-        trim_fq1 = "01_preprocessing/{sample}_1.fastq.gz",
-        trim_fq2 = "01_preprocessing/{sample}_2.fastq.gz",
+        trim_fq1 = "01_preprocessing/{sample}_R1.fastq.gz",
+        trim_fq2 = "01_preprocessing/{sample}_R2.fastq.gz",
         html_rep = "01_preprocessing/{sample}_report.html",
         json_rep = "01_preprocessing/{sample}_report.json"
     threads: 10
-    log:
-        "logs/fastp/{sample}.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         fastp \
@@ -56,7 +51,7 @@ rule fastp:
             -j {output.json_rep}
         """
 
-rule diplod_genome:
+rule diploid_genome:
     input:
         genome = str(config["genome"]),
         vcf = str(config["variants"])
@@ -66,24 +61,20 @@ rule diplod_genome:
     params:
         hap1 = config["hap_1"],
         hap2 = config["hap_2"]
-    log:
-        "logs/bcftools/diplod_genome.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         bcftools consensus \
             --fasta-ref {input.genome} \
             --haplotype 1 {input.vcf} \
             --sample {params.hap1} \
-            | sed -E 's/(>[^[:space:]]+).*/\\1_hap1/g' \
+            | sed -E 's/(>[^[:space:]]+).*/\\1_{params.hap1}/g' \
             | bgzip -c > genome_hap1.fa.gz
 
         bcftools consensus \
             --fasta-ref {input.genome} \
             --haplotype 1 {input.vcf} \
             --sample {params.hap2} \
-            | sed -E 's/(>[^[:space:]]+).*/\\1_hap2/g' \
+            | sed -E 's/(>[^[:space:]]+).*/\\1_{params.hap2}/g' \
             | bgzip -c > genome_hap2.fa.gz
 
         cat genome_hap1.fa.gz genome_hap2.fa.gz \
@@ -98,10 +89,6 @@ rule index_diploid_genome:
     output:
         index = "02_diplod_genome/diplod_genome.fa.gz.bwt"
     threads: 1
-    log:
-        "logs/bwa/index.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         bwa index {input.genome}
@@ -113,10 +100,6 @@ rule chr_sizes:
     output:
         chr_sizes = "02_diplod_genome/diplod_genome.chromsizes"
     threads: 1
-    log:
-        "logs/faidx/chr_sizes.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         samtools faidx {input.genome}
@@ -125,17 +108,13 @@ rule chr_sizes:
 
 rule bwa_mapping:
     input:
-        fq1 = "01_preprocessing/{sample}_1.fastq.gz",
-        fq2 = "01_preprocessing/{sample}_2.fastq.gz",
+        fq1 = "01_preprocessing/{sample}_R1.fastq.gz",
+        fq2 = "01_preprocessing/{sample}_R2.fastq.gz",
         genome = "02_diplod_genome/diplod_genome.fa.gz",
         index = "02_diplod_genome/diplod_genome.fa.gz.bwt"
     output:
         bam = "03_mapping/{sample}.bam"
     threads: 10
-    log:
-        "logs/bwa/align_{sample}.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         bwa mem \
@@ -157,10 +136,6 @@ rule pairtools_parse:
     params:
         par = config['pairtools_parse_params']
     threads: 1
-    log:
-        "logs/pairtools/parse_{sample}.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         pairtools parse \
@@ -176,10 +151,6 @@ rule pairtools_phase:
     output:
         pairs = "04_pairing/{sample}_phased_XA.pairs.gz"
     threads: 1
-    log:
-        "logs/pairtools/phase_{sample}.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         pairtools phase \
@@ -196,10 +167,6 @@ rule pairtools_sort:
     output:
         pairs = "04_pairing/{sample}_phased_sorted_XA.pairs.gz"
     threads: 10
-    log:
-        "logs/pairtools/sort_{sample}.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         pairtools sort \
@@ -215,10 +182,6 @@ rule pairtools_dedup:
         pairs = "04_pairing/{sample}_dedup_XA.pairs.gz",
         stats = "04_pairing/{sample}_dedup_XA.stats"
     threads: 1
-    log:
-        "logs/pairtools/dedup_{sample}.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         pairtools dedup \
@@ -240,10 +203,6 @@ rule pairtools_filter:
         pairsU = "05_filter/{sample}_phases_XA_unphased.pairs.gz",
         pairsT = "05_filter/{sample}_phases_XA_trans.pairs.gz"       
     threads: 1
-    log:
-        "logs/pairtools/stats_{sample}.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         pairtools select \
@@ -279,10 +238,6 @@ rule pairtools_stats:
         statsU = "06_stats/{sample}_phases_XA_unphased.stats",
         statsT = "06_stats/{sample}_phases_XA_trans.stats"
     threads: 1
-    log:
-        "logs/pairtools/stats_{sample}.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         pairtools stats {input.pairs0} -o {output.stats0}
@@ -301,10 +256,6 @@ rule multiqc:
         dir = directory("07_multiqc/{sample}"),
         html = "07_multiqc/{sample}/multiqc_report.html"
     threads: 1
-    log:
-        "logs/multiqc/{sample}.log"
-    conda:
-        "pairtools_phased"
     shell:
         """
         multiqc \
