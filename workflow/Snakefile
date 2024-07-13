@@ -27,7 +27,7 @@ onstart:
 # main workflow
 rule all:
     input:
-        expand("07_multiqc/{sample}/multiqc_report.html", sample=config["samples"]) 
+        "07_multiqc/multiqc_report.html"
 
 rule fastp:
     input:
@@ -255,16 +255,17 @@ rule pairtools_stats:
 
 rule multiqc:
     input:
-        statsT = "06_stats/{sample}_phases_XA_trans.stats"
+        statsT = expand("06_stats/{sample}_phases_XA_trans.stats", sample=config['samples'])
     output:
-        dir = directory("07_multiqc/{sample}"),
-        html = "07_multiqc/{sample}/multiqc_report.html"
+        html = "07_multiqc/multiqc_report.html"
+    params:
+        odir = "07_multiqc"
     threads: 1
     shell:
         """
         multiqc \
             --module pairtools \
-            -o {output.dir} \
+            -o {params.odir} \
             06_stats/
         """
 
