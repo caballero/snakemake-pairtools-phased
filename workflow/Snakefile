@@ -90,7 +90,7 @@ rule index_diploid_genome:
         index = "02_diploid_genome/diploid_genome.fa.gz.bwt"
     threads: 2
     resources:
-      mem_mb = 50000000
+      mem_mb = 50000
     shell:
         """
         bwa index {input.genome}
