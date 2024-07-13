@@ -68,19 +68,19 @@ rule diploid_genome:
             --haplotype 1 {input.vcf} \
             --sample {params.hap1} \
             | sed -E 's/(>[^[:space:]]+).*/\\1_{params.hap1}/g' \
-            | bgzip -c > genome_hap1.fa.gz
+            | bgzip -c > genome_{params.hap1}.fa.gz
 
         bcftools consensus \
             --fasta-ref {input.genome} \
             --haplotype 1 {input.vcf} \
             --sample {params.hap2} \
             | sed -E 's/(>[^[:space:]]+).*/\\1_{params.hap2}/g' \
-            | bgzip -c > genome_hap2.fa.gz
+            | bgzip -c > genome_{params.hap2}.fa.gz
 
-        cat genome_hap1.fa.gz genome_hap2.fa.gz \
+        cat genome_{params.hap1}.fa.gz genome_{params.hap2}.fa.gz \
             > {output.genome}
 
-        rm genome_hap1.fa.gz genome_hap2.fa.gz
+        rm genome_{params.hap1}.fa.gz genome_{params.hap2}.fa.gz
         """
 
 rule index_diploid_genome:
@@ -154,11 +154,14 @@ rule pairtools_phase:
         pairs = "04_pairing/{sample}_unphased_XA.pairs.gz"
     output:
         pairs = "04_pairing/{sample}_phased_XA.pairs.gz"
+    params:
+        hap1 = config["hap_1"],
+        hap2 = config["hap_2"]
     threads: 1
     shell:
         """
         pairtools phase \
-            --phase-suffixes _hap1 _hap2 \
+            --phase-suffixes _{params.hap1} _{params.hap2} \
             --tag-mode XA \
             --clean-output \
             {input.pairs} -o {output.pairs}
@@ -202,8 +205,8 @@ rule pairtools_filter:
     input:
         pairs = "04_pairing/{sample}_dedup_XA.pairs.gz"
     output:
-        pairs0 = "05_filter/{sample}_phases_XA_phase0.pairs.gz",
-        pairs1 = "05_filter/{sample}_phases_XA_phase1.pairs.gz",
+        pairs0 = "05_filter/{sample}_phases_XA_" + config['hap_1'] + ".pairs.gz",
+        pairs1 = "05_filter/{sample}_phases_XA_" + config['hap_2'] + ".pairs.gz",
         pairsU = "05_filter/{sample}_phases_XA_unphased.pairs.gz",
         pairsT = "05_filter/{sample}_phases_XA_trans.pairs.gz"       
     threads: 1
@@ -232,13 +235,13 @@ rule pairtools_filter:
 
 rule pairtools_stats:
     input:
-        pairs0 = "05_filter/{sample}_phases_XA_phase0.pairs.gz",
-        pairs1 = "05_filter/{sample}_phases_XA_phase1.pairs.gz",
+        pairs0 = "05_filter/{sample}_phases_XA_" + config['hap_1'] + ".pairs.gz",
+        pairs1 = "05_filter/{sample}_phases_XA_" + config['hap_2'] + ".pairs.gz",
         pairsU = "05_filter/{sample}_phases_XA_unphased.pairs.gz",
         pairsT = "05_filter/{sample}_phases_XA_trans.pairs.gz"
     output:
-        stats0 = "06_stats/{sample}_phases_XA_phase0.stats",
-        stats1 = "06_stats/{sample}_phases_XA_phase1.stats",
+        stats0 = "05_stats/{sample}_phases_XA_" + config['hap_1'] + ".stats",
+        stats1 = "05_stats/{sample}_phases_XA_" + config['hap_2'] + ".stats",
         statsU = "06_stats/{sample}_phases_XA_unphased.stats",
         statsT = "06_stats/{sample}_phases_XA_trans.stats"
     threads: 1
@@ -252,9 +255,6 @@ rule pairtools_stats:
 
 rule multiqc:
     input:
-        stats0 = "06_stats/{sample}_phases_XA_phase0.stats",
-        stats1 = "06_stats/{sample}_phases_XA_phase1.stats",
-        statsU = "06_stats/{sample}_phases_XA_unphased.stats",
         statsT = "06_stats/{sample}_phases_XA_trans.stats"
     output:
         dir = directory("07_multiqc/{sample}"),
