@@ -57,7 +57,7 @@ rule diploid_genome:
         vcf = str(config["variants"])
     output:
         genome = "02_diploid_genome/diploid_genome.fa.gz"
-    threads: 1
+    threads: 4
     params:
         hap1 = config["hap_1"],
         hap2 = config["hap_2"]
@@ -139,7 +139,7 @@ rule pairtools_parse:
         pairs = "04_pairing/{sample}_unphased_XA.pairs.gz"
     params:
         par = config['pairtools_parse_params']
-    threads: 1
+    threads: 10
     shell:
         """
         pairtools parse \
@@ -157,7 +157,7 @@ rule pairtools_phase:
     params:
         hap1 = config["hap_1"],
         hap2 = config["hap_2"]
-    threads: 1
+    threads: 10
     shell:
         """
         pairtools phase \
@@ -188,7 +188,7 @@ rule pairtools_dedup:
     output:
         pairs = "04_pairing/{sample}_dedup_XA.pairs.gz",
         stats = "04_pairing/{sample}_dedup_XA.stats"
-    threads: 1
+    threads: 10
     shell:
         """
         pairtools dedup \
@@ -209,7 +209,7 @@ rule pairtools_filter:
         pairs1 = "05_filter/{sample}_phases_XA_" + config['hap_2'] + ".pairs.gz",
         pairsU = "05_filter/{sample}_phases_XA_unphased.pairs.gz",
         pairsT = "05_filter/{sample}_phases_XA_trans.pairs.gz"       
-    threads: 1
+    threads: 10
     shell:
         """
         pairtools select \
@@ -244,7 +244,7 @@ rule pairtools_stats:
         stats1 = "05_stats/{sample}_phases_XA_" + config['hap_2'] + ".stats",
         statsU = "06_stats/{sample}_phases_XA_unphased.stats",
         statsT = "06_stats/{sample}_phases_XA_trans.stats"
-    threads: 1
+    threads: 10
     shell:
         """
         pairtools stats {input.pairs0} -o {output.stats0}
