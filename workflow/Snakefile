@@ -240,8 +240,8 @@ rule pairtools_stats:
         pairsU = "05_filter/{sample}_phases_XA_unphased.pairs.gz",
         pairsT = "05_filter/{sample}_phases_XA_trans.pairs.gz"
     output:
-        stats0 = "05_stats/{sample}_phases_XA_" + config['hap_1'] + ".stats",
-        stats1 = "05_stats/{sample}_phases_XA_" + config['hap_2'] + ".stats",
+        stats0 = "06_stats/{sample}_phases_XA_" + config['hap_1'] + ".stats",
+        stats1 = "06_stats/{sample}_phases_XA_" + config['hap_2'] + ".stats",
         statsU = "06_stats/{sample}_phases_XA_unphased.stats",
         statsT = "06_stats/{sample}_phases_XA_trans.stats"
     threads: 10
