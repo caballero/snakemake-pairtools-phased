@@ -266,7 +266,7 @@ rule multiqc:
         multiqc \
             --module pairtools \
             -o {params.odir} \
-            06_stats/
+            .
         """
 
 onsuccess:
