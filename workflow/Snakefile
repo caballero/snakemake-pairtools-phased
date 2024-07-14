@@ -136,14 +136,18 @@ rule pairtools_parse:
         bam = "03_mapping/{sample}.bam",
         chr_sizes = "02_diploid_genome/diploid_genome.chromsizes"
     output:
-        pairs = "04_pairing/{sample}_unphased_XA.pairs.gz"
+        pairs = "04_pairing/{sample}_unphased_XB.pairs.gz"
     params:
-        par = config['pairtools_parse_params']
-    threads: 10
+        minmapq = 0,
+	cols = 'XB,AS,XS',
+    threads: 12
     shell:
         """
         pairtools parse \
-            {params.par} \
+            --min-mapq {params.minmapq} \
+	    --add-columns {params.cols} \
+	    --drop-sam \
+	    --walks-policy all \
             -c {input.chr_sizes} \
             {input.bam} \
             -o {output.pairs}
@@ -151,18 +155,18 @@ rule pairtools_parse:
 
 rule pairtools_phase:
     input:
-        pairs = "04_pairing/{sample}_unphased_XA.pairs.gz"
+        pairs = "04_pairing/{sample}_unphased_XB.pairs.gz"
     output:
-        pairs = "04_pairing/{sample}_phased_XA.pairs.gz"
+        pairs = "04_pairing/{sample}_phased_XB.pairs.gz"
     params:
         hap1 = config["hap_1"],
         hap2 = config["hap_2"]
-    threads: 10
+    threads: 12
     shell:
         """
         pairtools phase \
             --phase-suffixes _{params.hap1} _{params.hap2} \
-            --tag-mode XA \
+            --tag-mode XB \
             --clean-output \
             {input.pairs} -o {output.pairs}
 
@@ -170,10 +174,10 @@ rule pairtools_phase:
 
 rule pairtools_sort:
     input:
-        pairs = "04_pairing/{sample}_phased_XA.pairs.gz"
+        pairs = "04_pairing/{sample}_phased_XB.pairs.gz"
     output:
-        pairs = "04_pairing/{sample}_phased_sorted_XA.pairs.gz"
-    threads: 10
+        pairs = "04_pairing/{sample}_phased_sorted_XB.pairs.gz"
+    threads: 22
     shell:
         """
         pairtools sort \
@@ -184,10 +188,10 @@ rule pairtools_sort:
 
 rule pairtools_dedup:
     input:
-        pairs = "04_pairing/{sample}_phased_sorted_XA.pairs.gz"
+        pairs = "04_pairing/{sample}_phased_sorted_XB.pairs.gz"
     output:
-        pairs = "04_pairing/{sample}_dedup_XA.pairs.gz",
-        stats = "04_pairing/{sample}_dedup_XA.stats"
+        pairs = "04_pairing/{sample}_dedup_XB.pairs.gz",
+        stats = "04_pairing/{sample}_dedup_XB.stats"
     threads: 10
     shell:
         """
@@ -203,12 +207,12 @@ rule pairtools_dedup:
 
 rule pairtools_filter:
     input:
-        pairs = "04_pairing/{sample}_dedup_XA.pairs.gz"
+        pairs = "04_pairing/{sample}_dedup_XB.pairs.gz"
     output:
-        pairs0 = "05_filter/{sample}_phases_XA_" + config['hap_1'] + ".pairs.gz",
-        pairs1 = "05_filter/{sample}_phases_XA_" + config['hap_2'] + ".pairs.gz",
-        pairsU = "05_filter/{sample}_phases_XA_unphased.pairs.gz",
-        pairsT = "05_filter/{sample}_phases_XA_trans.pairs.gz"       
+        pairs0 = "05_filter/{sample}_phases_XB_" + config['hap_1'] + ".pairs.gz",
+        pairs1 = "05_filter/{sample}_phases_XB_" + config['hap_2'] + ".pairs.gz",
+        pairsU = "05_filter/{sample}_phases_XB_unphased.pairs.gz",
+        pairsT = "05_filter/{sample}_phases_XB_trans.pairs.gz"       
     threads: 10
     shell:
         """
@@ -235,15 +239,15 @@ rule pairtools_filter:
 
 rule pairtools_stats:
     input:
-        pairs0 = "05_filter/{sample}_phases_XA_" + config['hap_1'] + ".pairs.gz",
-        pairs1 = "05_filter/{sample}_phases_XA_" + config['hap_2'] + ".pairs.gz",
-        pairsU = "05_filter/{sample}_phases_XA_unphased.pairs.gz",
-        pairsT = "05_filter/{sample}_phases_XA_trans.pairs.gz"
+        pairs0 = "05_filter/{sample}_phases_XB_" + config['hap_1'] + ".pairs.gz",
+        pairs1 = "05_filter/{sample}_phases_XB_" + config['hap_2'] + ".pairs.gz",
+        pairsU = "05_filter/{sample}_phases_XB_unphased.pairs.gz",
+        pairsT = "05_filter/{sample}_phases_XB_trans.pairs.gz"
     output:
-        stats0 = "06_stats/{sample}_phases_XA_" + config['hap_1'] + ".stats",
-        stats1 = "06_stats/{sample}_phases_XA_" + config['hap_2'] + ".stats",
-        statsU = "06_stats/{sample}_phases_XA_unphased.stats",
-        statsT = "06_stats/{sample}_phases_XA_trans.stats"
+        stats0 = "06_stats/{sample}_phases_XB_" + config['hap_1'] + ".stats",
+        stats1 = "06_stats/{sample}_phases_XB_" + config['hap_2'] + ".stats",
+        statsU = "06_stats/{sample}_phases_XB_unphased.stats",
+        statsT = "06_stats/{sample}_phases_XB_trans.stats"
     threads: 10
     shell:
         """
@@ -255,7 +259,7 @@ rule pairtools_stats:
 
 rule multiqc:
     input:
-        statsT = expand("06_stats/{sample}_phases_XA_trans.stats", sample=config['samples'])
+        statsT = expand("06_stats/{sample}_phases_XB_trans.stats", sample=config['samples'])
     output:
         html = "07_multiqc/multiqc_report.html"
     params:
