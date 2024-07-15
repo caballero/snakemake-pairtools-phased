@@ -1,6 +1,3 @@
-samples:
-  - sampleID1
-  - sampleID2
 fastq_dir: /path/to/fastq/dir
 genome: /paht/to/ref/genome.fa.gz  # compressed Fasta (bgzip) with index (samtools faidx)
 variants: /path/to/variants.vcf.gz # compressed VCF (bgzip) with index (tabix)
