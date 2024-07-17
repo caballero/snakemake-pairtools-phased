@@ -1,9 +1,9 @@
-samples:
-  - sampleID1
-  - sampleID2
 fastq_dir: /path/to/fastq/dir
-genome: /paht/to/ref/genome.fa.gz  # compressed Fasta (bgzip) with index (samtools faidx)
+genome: /path/to/ref/genome.fa.gz  # compressed Fasta (bgzip) with index (samtools faidx)
+ngenome: path/to/nmasked/genome.fa.gz # compressed Fasta for N-masked genome / default genome. Used to generate non-phased results.
 variants: /path/to/variants.vcf.gz # compressed VCF (bgzip) with index (tabix)
 hap_1: HAPLOTYPE_ID_1              # as defined in VCF file
 hap_2: HAPLOTYPE_ID_2              # as defined in VCF file
-pairtools_parse_params: "--min-mapq 0 --add-columns XA,NM,AS,XS --drop-sam --walks-policy all"
+bwa_parameters:
+  diploid_genome: "-SPu -T0"
+  nmask_genome: "-5SP -T0"
