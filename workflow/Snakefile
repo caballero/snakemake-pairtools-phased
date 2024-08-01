@@ -116,8 +116,8 @@ if config['genome']:
             bwa index {input.genome}
             """
 
-if config['ngenome']:
-    rule bwa_index:
+else: 
+   rule bwa_index:
         input:
             fna = Path(config['ngenome']).resolve()
         output:
@@ -266,22 +266,33 @@ rule pairtools_filter_phased:
         pairtools stats {output.pairs} -o {output.stats}
         """
 
-#rule hic_convert:
-#    input:
-#        pairs = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz"
-#    output:
-#        hic = "06_hic_files/{sample}_diploid_genome_{phasetype}.hic"
-#    threads: 12
-#    params:
-#        juicer = config["juicer_jar"]
-#        param = "-Xmx48000m  -Djava.awt.headless=true"
-#    resources:
-#        mem_mb = 48000
-#    shell:
-#        """
-#        java  -jar ./Micro-C/juicertools.jar pre --threads 16 mapped.pairs contact_map.hic hg38.genome
-#
-#        """
+rule cooler_convert:
+    input:
+        pairs = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz"
+        chromsize = "02_bwa_index/{ref}.chromsizes"
+    output:
+        cool = "07_cooler/{sample}_diploid_genome_{phasetype}.cool"
+    threads: 12
+    params:
+        binsize = config['binsize']
+    shell:
+        """
+        cooler cload pairix -p {threads} {input.chromsize}:{params.binsize} {input.pairs} {output.cool}
+        """
+
+rule cooler_zoom:
+    input:
+        cool = "07_cooler/{sample}_diploid_genome_{phasetype}.cool"
+    output:
+        mcoool = "07_cooler/{sample}_diploid_genome_{phasetype}.mcool"
+    threads: 12
+    params:
+        param = "--balancce"
+    shell:
+        """
+        cooler zoomify {params.param} -p {threads} {input.cool}
+        """
+
     
 rule multiqc:
     input:

@@ -7,4 +7,4 @@ hap_2: HAPLOTYPE_ID_2              # as defined in VCF file
 bwa_parameters:
   diploid_genome: "-SPu -T0"
   nmask_genome: "-5SP -T0"
-juicer_jar: /path/to/juicer.jar
+binsize: 1000
