@@ -1,3 +1,4 @@
+mode: allelic # or non-allelic
 fastq_dir: /path/to/fastq/dir
 genome: /path/to/ref/genome.fa.gz  # compressed Fasta (bgzip) with index (samtools faidx)
 ngenome: path/to/nmasked/genome.fa.gz # compressed Fasta for N-masked genome / default genome. Used to generate non-phased results.
