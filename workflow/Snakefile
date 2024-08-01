@@ -71,6 +71,7 @@ rule fastp:
         """
 
 if config['genome']:
+    print("using allelic mode")
     rule diploid_genome:
         input:
             genome = config["genome"],
@@ -117,9 +118,10 @@ if config['genome']:
             """
 
 else: 
-   rule bwa_index:
+    print("using unphased mode")
+    rule bwa_index:
         input:
-            fna = Path(config['ngenome']).resolve()
+            fna = config['ngenome']
         output:
             index = "02_bwa_index/nmask_genome.fa.gz.bwt"
         threads: 2
@@ -287,7 +289,7 @@ rule cooler_zoom:
         mcoool = "07_cooler/{sample}_diploid_genome_{phasetype}.mcool"
     threads: 12
     params:
-        param = "--balancce"
+        param = "--balance"
     shell:
         """
         cooler zoomify {params.param} -p {threads} {input.cool}
