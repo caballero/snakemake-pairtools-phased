@@ -6,7 +6,8 @@ import yaml
 from pathlib import Path
 
 # Set variables
-wildcard_constraints: sample=r".+\d+"
+#wildcard_constraints: sample=r".+\d+"
+
 SAMPLES, = glob_wildcards(
     Path(config['fastq_dir']) / '{sample}_R1.fastq.gz'
 )
