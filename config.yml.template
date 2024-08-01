@@ -13,3 +13,4 @@ correctionMethod: ICE
 nBinsToMerge: 0
 findTADParams: '--thresholdComparisons 0.01'
 distVsCountParams: 
+matrixFile_suffix: Trail
