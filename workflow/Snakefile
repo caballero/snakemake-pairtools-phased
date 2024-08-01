@@ -46,7 +46,8 @@ onstart:
 # main workflow
 rule all:
     input:
-        "07_multiqc/multiqc_report.html"
+        "07_multiqc/multiqc_report.html",
+        "dist_vs_counts.png"
 
 rule fastp:
     input:
@@ -268,9 +269,21 @@ rule pairtools_filter_phased:
         pairtools stats {output.pairs} -o {output.stats}
         """
 
+rule pairix_index:
+    input:
+        pairs = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz",
+    output:
+        index = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz.px2"
+    threads: 1
+    shell:
+        """
+        pairix {input.pairs}
+        """
+
 rule cooler_convert:
     input:
-        pairs = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz"
+        pairs = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz",
+        pairidx = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz.px2",
         chromsize = "02_bwa_index/{ref}.chromsizes"
     output:
         cool = "07_cooler/{sample}_diploid_genome_{phasetype}.cool"
@@ -295,7 +308,108 @@ rule cooler_zoom:
         cooler zoomify {params.param} -p {threads} {input.cool}
         """
 
-    
+
+## Merge the samples if asked
+rule merge_matrices:
+      input:
+          lambda wildcards: expand("08_HiC_matrices/{sample}_"+matrixFile_suffix+matrix_format, sample = sample_dict[wildcards.group])
+      output:
+          matrix = "08_HiC_matrices/mergedSamples_{group}_"+matrixFile_suffix+matrix_format
+      shell:
+          "hicSumMatrices -m {input} -o {output.matrix}"
+
+## Merge the bins if asked
+rule merge_bins:
+     input:
+         "HiC_matrices/{sample}_"+matrixFile_suffix+matrix_format
+     output:
+         matrix = "08_HiC_matrices/{sample}_Mbins" + str(nBinsToMerge) + "_" + matrixFile_suffix+matrix_format
+     params:
+         num_bins=config['nBinsToMerge']
+     shell:
+         "hicMergeMatrixBins -m {input} -nb {params.num_bins} -o {output.matrix}"
+
+## diagnostic plots
+rule diagnostic_plot:
+    input:
+        cool = "07_cooler/{sample}_diploid_genome_{phasetype}.cool"
+    output:
+        plot = "08_HiC_matrices/QCplots/{sample}_diploid_genome_{phasetype}_diagnostic_plot.pdf",
+        mad = "08_HiC_matrices/QCplots/{sample}_diploid_genome_{phasetype}_mad_threshold.out"
+    params:
+        #chr = lambda wildcards: " --chromosomes " + chromosomes if chromosomes else ""
+    shell:
+       "hicCorrectMatrix diagnostic_plot -m {input.cool} -o {output.plot} 2> {output.mad} "
+
+
+# Compute MAD score thresholds
+rule compute_thresholds:
+   input:
+      mad = "08_HiC_matrices/QCplots/{sample}_diploid_genome_{phasetype}_mad_threshold.out"
+   output:
+      out = "09_HiC_matrices_corrected/logs/thresholds_{sample}_diploid_genome_{phasetype}.out"
+   shell:
+         "madscore=$(grep \"mad threshold \" {input.mad} | sed 's/INFO:hicexplorer.hicCorrectMatrix:mad threshold //g');"
+         "upper=$(echo -3*$madscore | bc);"
+         "echo $madscore \" \" $upper >> {output.out}"
+
+
+## Correct matrices
+if config['correctionMethod'] == 'ICE':
+    rule correct_matrix:
+        input:
+            matrix = "07_cooler/{sample}_diploid_genome_{phasetype}.cool",
+            correct = "09_HiC_matrices_corrected/logs/thresholds_{sample}_diploid_genome_{phasetype}.out"
+        output:
+            out = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool
+        params:
+            #chr = lambda wildcards: " --chromosomes " + chromosomes if chromosomes else ""
+        shell:
+            "thresholds=$(cat \"{input.correct}\");"
+            "hicCorrectMatrix correct --correctionMethod ICE --filterThreshold $thresholds"
+            "  -m {input.matrix} -o {output.out} >> {input.correct}"
+
+else:
+     rule correct_matrix:
+         input:
+            matrix = "07_cooler/{sample}_diploid_genome_{phasetype}.cool"
+         output:
+            out = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool
+         params:
+            #chr = lambda wildcards: " --chromosomes " + chromosomes if chromosomes else ""
+         shell:
+             "hicCorrectMatrix correct --correctionMethod KR "
+             "  -m {input.matrix} -o {output.out}"
+
+## Call TADs
+rule call_tads:
+    input:
+        cool = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool"
+    output:
+        tad = "10_TADs/{sample}_diploid_genome_{phasetype}_corrected_boundaries.bed"
+    params:
+        prefix = "10_TADs/{sample}_diploid_genome_{phasetype}_corrected",
+        params = config["findTADParams"]
+    threads: lambda wildcards: 10 if 10<max_thread else max_thread
+    shell:
+        "hicFindTADs -m {input.cool} "
+        "{params.params} "
+        "--correctForMultipleTesting bonferroni "
+        "-p {threads} "
+        "--outPrefix {params.prefix}"
+
+##compare matrices using hicPlotDistVsCounts
+rule distvscounts:
+   input:
+        matrices = expand("09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool", sample = SAMPLES)
+   output:
+        out = "dist_vs_counts.png"
+   params:
+        function_params = lambda wildcards: distVsCountParams if distVsCountParams else " "
+   shell:
+       "hicPlotDistVsCounts -m  {input.matrices} -o {output.out} {params.function_params}"
+
+
 rule multiqc:
     input:
         stats = expand(
