@@ -183,7 +183,7 @@ rule pairtools_parse:
     params:
         minmapq = 40,
         cols = lambda wildcards: '--add-columns XB,AS,XS' if 'diploid' in wildcards.ref else ''
-    threads: 12
+    #threads: 12
     shell:
         """
         pairtools parse \
@@ -312,18 +312,18 @@ rule cooler_zoom:
 ## Merge the samples if asked
 rule merge_matrices:
       input:
-          lambda wildcards: expand("08_HiC_matrices/{sample}_"+matrixFile_suffix+matrix_format, sample = sample_dict[wildcards.group])
+          lambda wildcards: expand("08_HiC_matrices/{sample}_"+config['matrixFile_suffix']+".cool", sample = sample_dict[wildcards.group])
       output:
-          matrix = "08_HiC_matrices/mergedSamples_{group}_"+matrixFile_suffix+matrix_format
+          matrix = "08_HiC_matrices/mergedSamples_{group}_"+config['matrixFile_suffix']+".cool"
       shell:
           "hicSumMatrices -m {input} -o {output.matrix}"
 
 ## Merge the bins if asked
 rule merge_bins:
      input:
-         "HiC_matrices/{sample}_"+matrixFile_suffix+matrix_format
+         "HiC_matrices/{sample}_"+config['matrixFile_suffix']+".cool"
      output:
-         matrix = "08_HiC_matrices/{sample}_Mbins" + str(nBinsToMerge) + "_" + matrixFile_suffix+matrix_format
+         matrix = "08_HiC_matrices/{sample}_Mbins" + str(config["nBinsToMerge"]) + "_" +config['matrixFile_suffix']+".cool"
      params:
          num_bins=config['nBinsToMerge']
      shell:
@@ -361,7 +361,7 @@ if config['correctionMethod'] == 'ICE':
             matrix = "07_cooler/{sample}_diploid_genome_{phasetype}.cool",
             correct = "09_HiC_matrices_corrected/logs/thresholds_{sample}_diploid_genome_{phasetype}.out"
         output:
-            out = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool
+            out = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool"
         params:
             #chr = lambda wildcards: " --chromosomes " + chromosomes if chromosomes else ""
         shell:
@@ -374,7 +374,7 @@ else:
          input:
             matrix = "07_cooler/{sample}_diploid_genome_{phasetype}.cool"
          output:
-            out = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool
+            out = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool"
          params:
             #chr = lambda wildcards: " --chromosomes " + chromosomes if chromosomes else ""
          shell:
@@ -390,7 +390,8 @@ rule call_tads:
     params:
         prefix = "10_TADs/{sample}_diploid_genome_{phasetype}_corrected",
         params = config["findTADParams"]
-    threads: lambda wildcards: 10 if 10<max_thread else max_thread
+    threads: lambda wildcards: 10 if 10 < max_thread else max_thread
+    
     shell:
         "hicFindTADs -m {input.cool} "
         "{params.params} "
@@ -401,11 +402,11 @@ rule call_tads:
 ##compare matrices using hicPlotDistVsCounts
 rule distvscounts:
    input:
-        matrices = expand("09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool", sample = SAMPLES)
+        matrices = expand("09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool", sample = SAMPLES, phasetype = PHASETYPES)
    output:
         out = "dist_vs_counts.png"
    params:
-        function_params = lambda wildcards: distVsCountParams if distVsCountParams else " "
+        function_params = lambda wildcards: config["distVsCountParams"] if config["distVsCountParams"] else " "
    shell:
        "hicPlotDistVsCounts -m  {input.matrices} -o {output.out} {params.function_params}"
 
