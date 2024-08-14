@@ -51,7 +51,6 @@ onstart:
     print(config)
     print("=" * 80)
     print()
-    print("Samples: " + SAMPLES)
 
 # main workflow
 rule all:
