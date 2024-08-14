@@ -29,8 +29,10 @@ PHASEDIC = dict(map(lambda i,j : (i,j) , PHASETYPES, PHASEFILTER))
 
 if config['mode'] == 'allelic':
     REF='diploid_genome'
+    BWAPAR=config['bwa_parameters']['diplod_genome']
 else:
     REF='nmask_genome'
+    BWAPAR=config['bwa_parameters']['nmask_genome']
 
 # Define function that returns pair files (phased or unphased), based on the reference.
 def ret_pair(wildcards):
@@ -40,11 +42,7 @@ def ret_pair(wildcards):
     else:
         return f"04_pairing/{wildcards.sample}.{wildcards.ref}.pairs.gz"
 
-def get_bwa_params(wildcards):
-    if config['mode'] == 'allelic':
-        return config['bwa_parameters']['diplod_genome']
-    else:
-        return config['bwa_parameters']['nmask_genome']
+
 
 # before running the process
 onstart:
@@ -170,7 +168,7 @@ rule bwa_mapping:
     params:
       bwathreads = 20,
       fna = lambda wildcards, input: Path(input.ix).with_suffix(''),
-      mapparams = get_bwa_params
+      mapparams = BWAPAR
       
     resources:
       mem_mb = 3000
