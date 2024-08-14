@@ -40,7 +40,7 @@ def ret_pair(wildcards):
     else:
         return f"04_pairing/{wildcards.sample}.{wildcards.ref}.pairs.gz"
 
-def get_bwa_params():
+def get_bwa_params(wildcards):
     if config['mode'] == 'allelic':
         return config['bwa_parameters']['diplod_genome']
     else:
