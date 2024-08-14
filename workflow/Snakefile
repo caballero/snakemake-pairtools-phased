@@ -29,7 +29,7 @@ PHASEDIC = dict(map(lambda i,j : (i,j) , PHASETYPES, PHASEFILTER))
 
 if config['mode'] == 'allelic':
     REF='diploid_genome'
-    BWAPAR=config['bwa_parameters']['diplod_genome']
+    BWAPAR=config['bwa_parameters']['diploid_genome']
 else:
     REF='nmask_genome'
     BWAPAR=config['bwa_parameters']['nmask_genome']
