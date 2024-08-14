@@ -57,7 +57,6 @@ rule all:
         #"dist_vs_counts.png"
 
 rule fastp:
-    print("performing preprocessing and QC")
     input:
         fq1 = config['fastq_dir'] + "/{sample}_R1.fastq.gz",
         fq2 = config['fastq_dir'] + "/{sample}_R2.fastq.gz"
@@ -80,7 +79,6 @@ rule fastp:
         """
 
 if config['mode'] == 'allelic':
-    print("using allelic mode")
     rule diploid_genome:
         input:
             genome = config["genome"],
@@ -127,7 +125,6 @@ if config['mode'] == 'allelic':
             """
 
 else: 
-    print("using unphased mode")
     rule bwa_index:
         input:
             fna = config['genome']
@@ -143,7 +140,6 @@ else:
             """
 
 rule chr_sizes:
-    print("extracting chromosome sizes")
     input:
         bwaix = "02_bwa_index/{ref}.fa.gz.bwt"
     output:
@@ -158,7 +154,6 @@ rule chr_sizes:
         """
 
 rule bwa_mapping:
-    print("aligning reads to genome")
     input:
         fq1 = "01_preprocessing/{sample}_R1.fastq.gz",
         fq2 = "01_preprocessing/{sample}_R2.fastq.gz",
