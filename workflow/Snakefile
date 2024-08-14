@@ -43,9 +43,9 @@ def ret_pair(wildcards):
 def get_bwa_params():
     if config['mode'] == 'allelic':
         return config['bwa_parameters']['diplod_genome']
-      else:
+    else:
         return config['bwa_parameters']['nmask_genome']
-        
+
 # before running the process
 onstart:
     print("\n==== Pairtools Phased Pipeline starts ====")
