@@ -11,7 +11,7 @@ from pathlib import Path
 SAMPLES, = glob_wildcards(
     Path(config['fastq_dir']) / '{sample}_R1.fastq.gz'
 )
-REFERENCES = config['bwa_parameters'].keys()
+
 PHASETYPES = [
     config['hap_1'],
     config['hap_2'],
@@ -27,29 +27,37 @@ PHASEFILTER = [
 ]
 PHASEDIC = dict(map(lambda i,j : (i,j) , PHASETYPES, PHASEFILTER))
 
+if config['mode'] == 'allelic':
+    REF='diploid_genome'
+else:
+    REF='nmask_genome'
+
 # Define function that returns pair files (phased or unphased), based on the reference.
 def ret_pair(wildcards):
-    if 'diploid' in wildcards.ref:
+    if config['mode'] == 'allelic':
         # Phased setting
-        return f"04_pairing/{wildcards.sample}_{wildcards.ref}_phased.pairs.gz"
+        return f"04_pairing/{wildcards.sample}.{wildcards.ref}.phased.pairs.gz"
     else:
-        return f"04_pairing/{wildcards.sample}_{wildcards.ref}.pairs.gz"
+        return f"04_pairing/{wildcards.sample}.{wildcards.ref}.pairs.gz"
 
 # before running the process
 onstart:
-    print("\n==== Variant calling pipeline starts ====")
+    print("\n==== Pairtools Phased Pipeline starts ====")
     print("Configuration:")
     print(config)
     print("=" * 80)
     print()
+    print("Samples: " + SAMPLES)
 
 # main workflow
 rule all:
     input:
-        "07_multiqc/multiqc_report.html",
-        "dist_vs_counts.png"
+        "09_multiqc/multiqc_report.html",
+        expand("07_cooler/{sample}.{ref}.{phasetype}.mcool", sample = SAMPLES, ref = REF, phasetype = PHASETYPES)
+        #"dist_vs_counts.png"
 
 rule fastp:
+    print("performing preprocessing and QC")
     input:
         fq1 = config['fastq_dir'] + "/{sample}_R1.fastq.gz",
         fq2 = config['fastq_dir'] + "/{sample}_R2.fastq.gz"
@@ -71,7 +79,7 @@ rule fastp:
             -j {output.json_rep}
         """
 
-if config['genome']:
+if config['mode'] == 'allelic':
     print("using allelic mode")
     rule diploid_genome:
         input:
@@ -122,7 +130,7 @@ else:
     print("using unphased mode")
     rule bwa_index:
         input:
-            fna = config['ngenome']
+            fna = config['genome']
         output:
             index = "02_bwa_index/nmask_genome.fa.gz.bwt"
         threads: 2
@@ -135,6 +143,7 @@ else:
             """
 
 rule chr_sizes:
+    print("extracting chromosome sizes")
     input:
         bwaix = "02_bwa_index/{ref}.fa.gz.bwt"
     output:
@@ -149,6 +158,7 @@ rule chr_sizes:
         """
 
 rule bwa_mapping:
+    print("aligning reads to genome")
     input:
         fq1 = "01_preprocessing/{sample}_R1.fastq.gz",
         fq2 = "01_preprocessing/{sample}_R2.fastq.gz",
@@ -158,8 +168,11 @@ rule bwa_mapping:
     threads: 30
     params:
       bwathreads = 20,
-      mapparams = lambda wildcards: config['bwa_parameters'][wildcards.ref],
-      fna = lambda wildcards, input: Path(input.ix).with_suffix('')
+      fna = lambda wildcards, input: Path(input.ix).with_suffix(''),
+      if config['mode'] == 'allelic':
+        mapparams = config['bwa_parameters']['diplod_genome']
+      else:
+        mapparams = config['bwa_parameters']['nmask_genome']
     resources:
       mem_mb = 3000
     shell:
@@ -179,10 +192,10 @@ rule pairtools_parse:
         bam = "03_mapping/{sample}.{ref}.bam",
         chr_sizes = "02_bwa_index/{ref}.chromsizes"
     output:
-        pairs = "04_pairing/{sample}_{ref}.pairs.gz"
+        pairs = "04_pairing/{sample}.{ref}.pairs.gz"
     params:
         minmapq = 40,
-        cols = lambda wildcards: '--add-columns XB,AS,XS' if 'diploid' in wildcards.ref else ''
+        cols = lambda wildcards: '--add-columns XB,AS,XS' if config['mode'] == 'allelic' else ''
     #threads: 12
     shell:
         """
@@ -198,9 +211,9 @@ rule pairtools_parse:
 
 rule pairtools_phase:
     input:
-        pairs = "04_pairing/{sample}_diploid_genome.pairs.gz"
+        pairs = "04_pairing/{sample}.{ref}.pairs.gz"
     output:
-        pairs = "04_pairing/{sample}_diploid_genome_phased.pairs.gz"
+        pairs = "04_pairing/{sample}.{ref}.phased.pairs.gz"
     params:
         hap1 = config["hap_1"],
         hap2 = config["hap_2"]
@@ -218,7 +231,7 @@ rule pairtools_sort:
     input:
         ret_pair
     output:
-        pairs = "04_pairing/{sample}_{ref}.pairs.sorted.gz"
+        pairs = "04_pairing/{sample}.{ref}.pairs.sorted.gz"
     threads: 20
     shell:
         """
@@ -230,12 +243,12 @@ rule pairtools_sort:
 
 rule pairtools_dedup:
     input:
-        pairs = "04_pairing/{sample}_{ref}.pairs.sorted.gz"
+        pairs = "04_pairing/{sample}.{ref}.pairs.sorted.gz"
     output:
-        pairs = "04_pairing/{sample}_{ref}.pairs.dedup.gz",
-        stats = "04_pairing/{sample}_{ref}.pairs.dedup.stats"
+        pairs = "04_pairing/{sample}.{ref}.pairs.dedup.gz",
+        stats = "04_pairing/{sample}.{ref}.pairs.dedup.stats"
     params:
-        extra_cols = lambda wildcards: '--extra-col-pair phase1 phase2'  if 'diploid' in wildcards.ref else ''
+        extra_cols = lambda wildcards: '--extra-col-pair phase1 phase2'  if config['mode']=='allelic' else ''
     threads: 12
     shell:
         """
@@ -251,10 +264,10 @@ rule pairtools_dedup:
 
 rule pairtools_filter_phased:
     input:
-        pairs = "04_pairing/{sample}_diploid_genome.pairs.dedup.gz"
+        pairs = "04_pairing/{sample}.{ref}.pairs.dedup.gz"
     output:
-        stats = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.stats",
-        pairs = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz"
+        stats = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.stats",
+        pairs = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.gz"
     params:
         filterparam = lambda wildcards: PHASEDIC[wildcards.phasetype]
     resources:
@@ -271,9 +284,9 @@ rule pairtools_filter_phased:
 
 rule pairix_index:
     input:
-        pairs = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz",
+        pairs = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.gz",
     output:
-        index = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz.px2"
+        index = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.gz.px2"
     threads: 1
     shell:
         """
@@ -282,11 +295,11 @@ rule pairix_index:
 
 rule cooler_convert:
     input:
-        pairs = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz",
-        pairidx = "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.gz.px2",
+        pairs = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.gz",
+        pairidx = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.gz.px2",
         chromsize = "02_bwa_index/{ref}.chromsizes"
     output:
-        cool = "07_cooler/{sample}_diploid_genome_{phasetype}.cool"
+        cool = "07_cooler/{sample}.{ref}.{phasetype}.cool"
     threads: 12
     params:
         binsize = config['binsize']
@@ -297,9 +310,9 @@ rule cooler_convert:
 
 rule cooler_zoom:
     input:
-        cool = "07_cooler/{sample}_diploid_genome_{phasetype}.cool"
+        cool = "07_cooler/{sample}.{ref}.{phasetype}.cool"
     output:
-        mcoool = "07_cooler/{sample}_diploid_genome_{phasetype}.mcool"
+        mcoool = "07_cooler/{sample}.{ref}.{phasetype}.mcool"
     threads: 12
     params:
         param = "--balance"
@@ -310,123 +323,123 @@ rule cooler_zoom:
 
 
 ## Merge the samples if asked
-rule merge_matrices:
-      input:
-          lambda wildcards: expand("08_HiC_matrices/{sample}_"+config['matrixFile_suffix']+".cool", sample = sample_dict[wildcards.group])
-      output:
-          matrix = "08_HiC_matrices/mergedSamples_{group}_"+config['matrixFile_suffix']+".cool"
-      shell:
-          "hicSumMatrices -m {input} -o {output.matrix}"
+#rule merge_matrices:
+#      input:
+#          lambda wildcards: expand("08_HiC_matrices/{sample}_"+config['matrixFile_suffix']+".cool", sample = sample_dict[wildcards.group])
+#      output:
+#          matrix = "08_HiC_matrices/mergedSamples_{group}_"+config['matrixFile_suffix']+".cool"
+#      shell:
+#          "hicSumMatrices -m {input} -o {output.matrix}"
 
 ## Merge the bins if asked
-rule merge_bins:
-     input:
-         "HiC_matrices/{sample}_"+config['matrixFile_suffix']+".cool"
-     output:
-         matrix = "08_HiC_matrices/{sample}_Mbins" + str(config["nBinsToMerge"]) + "_" +config['matrixFile_suffix']+".cool"
-     params:
-         num_bins=config['nBinsToMerge']
-     shell:
-         "hicMergeMatrixBins -m {input} -nb {params.num_bins} -o {output.matrix}"
+#rule merge_bins:
+#     input:
+#         "HiC_matrices/{sample}_"+config['matrixFile_suffix']+".cool"
+#     output:
+#         matrix = "08_HiC_matrices/{sample}_Mbins" + str(config["nBinsToMerge"]) + "_" +config['matrixFile_suffix']+".cool"
+#     params:
+#         num_bins=config['nBinsToMerge']
+#     shell:
+#         "hicMergeMatrixBins -m {input} -nb {params.num_bins} -o {output.matrix}"
 
 ## diagnostic plots
 rule diagnostic_plot:
     input:
-        cool = "07_cooler/{sample}_diploid_genome_{phasetype}.cool"
+        cool = "07_cooler/{sample}.{ref}.{phasetype}.cool"
     output:
-        plot = "08_HiC_matrices/QCplots/{sample}_diploid_genome_{phasetype}_diagnostic_plot.pdf",
-        mad = "08_HiC_matrices/QCplots/{sample}_diploid_genome_{phasetype}_mad_threshold.out"
+        plot = "08_HiC_matrices/QCplots/{sample}.{ref}.{phasetype}.diagnostic_plot.pdf",
+        mad = "08_HiC_matrices/QCplots/{sample}.{ref}.{phasetype}.mad_threshold.out"
     params:
-        #chr = lambda wildcards: " --chromosomes " + chromosomes if chromosomes else ""
+        chr = lambda wildcards: " --chromosomes " + chromosomes if config['chromosomes'] else ""
     shell:
-       "hicCorrectMatrix diagnostic_plot -m {input.cool} -o {output.plot} 2> {output.mad} "
+       "hicCorrectMatrix diagnostic_plot {params.chr} -m {input.cool} -o {output.plot} 2> {output.mad} "
 
 
 # Compute MAD score thresholds
-rule compute_thresholds:
-   input:
-      mad = "08_HiC_matrices/QCplots/{sample}_diploid_genome_{phasetype}_mad_threshold.out"
-   output:
-      out = "09_HiC_matrices_corrected/logs/thresholds_{sample}_diploid_genome_{phasetype}.out"
-   shell:
-         "madscore=$(grep \"mad threshold \" {input.mad} | sed 's/INFO:hicexplorer.hicCorrectMatrix:mad threshold //g');"
-         "upper=$(echo -3*$madscore | bc);"
-         "echo $madscore \" \" $upper >> {output.out}"
+#rule compute_thresholds:
+#   input:
+#      mad = "08_HiC_matrices/QCplots/{sample}_diploid_genome_{phasetype}_mad_threshold.out"
+#   output:
+#      out = "09_HiC_matrices_corrected/logs/thresholds_{sample}_diploid_genome_{phasetype}.out"
+#   shell:
+#         "madscore=$(grep \"mad threshold \" {input.mad} | sed 's/INFO:hicexplorer.hicCorrectMatrix:mad threshold //g');"
+#         "upper=$(echo -3*$madscore | bc);"
+#         "echo $madscore \" \" $upper >> {output.out}"
 
 
 ## Correct matrices
-if config['correctionMethod'] == 'ICE':
-    rule correct_matrix:
-        input:
-            matrix = "07_cooler/{sample}_diploid_genome_{phasetype}.cool",
-            correct = "09_HiC_matrices_corrected/logs/thresholds_{sample}_diploid_genome_{phasetype}.out"
-        output:
-            out = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool"
-        params:
-            #chr = lambda wildcards: " --chromosomes " + chromosomes if chromosomes else ""
-        shell:
-            "thresholds=$(cat \"{input.correct}\");"
-            "hicCorrectMatrix correct --correctionMethod ICE --filterThreshold $thresholds"
-            "  -m {input.matrix} -o {output.out} >> {input.correct}"
+#if config['correctionMethod'] == 'ICE':
+#    rule correct_matrix:
+#        input:
+#            matrix = "07_cooler/{sample}_diploid_genome_{phasetype}.cool",
+#            correct = "09_HiC_matrices_corrected/logs/thresholds_{sample}_diploid_genome_{phasetype}.out"
+#        output:
+#            out = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool"
+#        params:
+#            #chr = lambda wildcards: " --chromosomes " + chromosomes if chromosomes else ""
+#        shell:
+#            "thresholds=$(cat \"{input.correct}\");"
+#            "hicCorrectMatrix correct --correctionMethod ICE --filterThreshold $thresholds"
+#            "  -m {input.matrix} -o {output.out} >> {input.correct}"
 
-else:
-     rule correct_matrix:
-         input:
-            matrix = "07_cooler/{sample}_diploid_genome_{phasetype}.cool"
-         output:
-            out = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool"
-         params:
-            #chr = lambda wildcards: " --chromosomes " + chromosomes if chromosomes else ""
-         shell:
-             "hicCorrectMatrix correct --correctionMethod KR "
-             "  -m {input.matrix} -o {output.out}"
+#else:
+#     rule correct_matrix:
+#         input:
+#            matrix = "07_cooler/{sample}_diploid_genome_{phasetype}.cool"
+#         output:
+#            out = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool"
+#         params:
+#            #chr = lambda wildcards: " --chromosomes " + chromosomes if chromosomes else ""
+#         shell:
+#             "hicCorrectMatrix correct --correctionMethod KR "
+#             "  -m {input.matrix} -o {output.out}"
 
 ## Call TADs
-rule call_tads:
-    input:
-        cool = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool"
-    output:
-        tad = "10_TADs/{sample}_diploid_genome_{phasetype}_corrected_boundaries.bed"
-    params:
-        prefix = "10_TADs/{sample}_diploid_genome_{phasetype}_corrected",
-        params = config["findTADParams"]
-    threads: lambda wildcards: 10 if 10 < max_thread else max_thread
-    
-    shell:
-        "hicFindTADs -m {input.cool} "
-        "{params.params} "
-        "--correctForMultipleTesting bonferroni "
-        "-p {threads} "
-        "--outPrefix {params.prefix}"
+#rule call_tads:
+#    input:
+#        cool = "09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool"
+#    output:
+#        tad = "10_TADs/{sample}_diploid_genome_{phasetype}_corrected_boundaries.bed"
+#    params:
+#        prefix = "10_TADs/{sample}_diploid_genome_{phasetype}_corrected",
+#        params = config["findTADParams"]
+#    threads: lambda wildcards: 10 if 10 < max_thread else max_thread
+#    
+#    shell:
+#        "hicFindTADs -m {input.cool} "
+#        "{params.params} "
+#        "--correctForMultipleTesting bonferroni "
+#        "-p {threads} "
+#        "--outPrefix {params.prefix}"
 
 ##compare matrices using hicPlotDistVsCounts
-rule distvscounts:
-   input:
-        matrices = expand("09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool", sample = SAMPLES, phasetype = PHASETYPES)
-   output:
-        out = "dist_vs_counts.png"
-   params:
-        function_params = lambda wildcards: config["distVsCountParams"] if config["distVsCountParams"] else " "
-   shell:
-       "hicPlotDistVsCounts -m  {input.matrices} -o {output.out} {params.function_params}"
+#rule distvscounts:
+#   input:
+#        matrices = expand("09_HiC_matrices_corrected/{sample}_diploid_genome_{phasetype}_corrected.cool", sample = SAMPLES, phasetype = PHASETYPES)
+#   output:
+#        out = "dist_vs_counts.png"
+#   params:
+#        function_params = lambda wildcards: config["distVsCountParams"] if config["distVsCountParams"] else " "
+#   shell:
+#       "hicPlotDistVsCounts -m  {input.matrices} -o {output.out} {params.function_params}"
 
 
 rule multiqc:
     input:
         stats = expand(
-            "04_pairing/{sample}_{ref}.pairs.dedup.stats",
+            "04_pairing/{sample}.{ref}.pairs.dedup.stats",
             sample=SAMPLES,
             ref=REFERENCES
         ),
         phasedstats = expand(
-            "05_phase_stats/{sample}_diploid_genome_{phasetype}.pairs.stats",
+            "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.stats",
             sample=SAMPLES,
             phasetype = PHASEDIC.keys()
         )
     output:
-        html = "07_multiqc/multiqc_report.html"
+        html = "09_multiqc/multiqc_report.html"
     params:
-        odir = "07_multiqc"
+        odir = "09_multiqc"
     threads: 1
     shell:
         """
