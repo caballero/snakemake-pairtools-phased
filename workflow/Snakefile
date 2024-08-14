@@ -40,6 +40,12 @@ def ret_pair(wildcards):
     else:
         return f"04_pairing/{wildcards.sample}.{wildcards.ref}.pairs.gz"
 
+def get_bwa_params():
+    if config['mode'] == 'allelic':
+        return config['bwa_parameters']['diplod_genome']
+      else:
+        return config['bwa_parameters']['nmask_genome']
+        
 # before running the process
 onstart:
     print("\n==== Pairtools Phased Pipeline starts ====")
@@ -164,10 +170,8 @@ rule bwa_mapping:
     params:
       bwathreads = 20,
       fna = lambda wildcards, input: Path(input.ix).with_suffix(''),
-      if config['mode'] == 'allelic':
-        mapparams = config['bwa_parameters']['diplod_genome']
-      else:
-        mapparams = config['bwa_parameters']['nmask_genome']
+      mapparams = get_bwa_params
+      
     resources:
       mem_mb = 3000
     shell:
