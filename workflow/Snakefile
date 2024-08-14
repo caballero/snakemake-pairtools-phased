@@ -428,12 +428,13 @@ rule multiqc:
         stats = expand(
             "04_pairing/{sample}.{ref}.pairs.dedup.stats",
             sample=SAMPLES,
-            ref=REFERENCES
+            ref=REF
         ),
         phasedstats = expand(
             "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.stats",
             sample=SAMPLES,
-            phasetype = PHASEDIC.keys()
+            ref=REF,
+            phasetype=PHASEDIC.keys()
         )
     output:
         html = "09_multiqc/multiqc_report.html"
