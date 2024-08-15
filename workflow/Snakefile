@@ -62,8 +62,17 @@ onstart:
 # main workflow
 rule all:
     input:
-        "09_multiqc/multiqc_report.html",
-        expand("07_cooler/{sample}.{ref}.{phasetype}.mcool", sample = SAMPLES, ref = REF, phasetype = PHASETYPES)
+        "99_multiqc/multiqc_report.html",
+        expand("07_HiC_matrices/QCplots/{sample}.{ref}.{phasetype}.diagnostic_plot.pdf",
+                sample = SAMPLES,
+                ref = REF,
+                phasetype = PHASETYPES
+                ),
+        expand("06_cooler/{sample}.{ref}.{phasetype}.mcool",
+                sample = SAMPLES,
+                ref = REF,
+                phasetype = PHASETYPES
+                )
         #"dist_vs_counts.png"
 
 rule fastp:
@@ -353,7 +362,15 @@ rule diagnostic_plot:
     params:
         chr = lambda wildcards: " --chromosomes " + chromosomes if config['chromosomes'] else ""
     shell:
-       "hicCorrectMatrix diagnostic_plot {params.chr} -m {input.cool} -o {output.plot} 2> {output.mad} "
+        """
+        if [[ {input.cool} =~ "unphased" ]]
+        then
+            touch {output.plot}
+            touch {output.mad}
+        else
+            hicCorrectMatrix diagnostic_plot {params.chr} -m {input.cool} -o {output.plot} 2> {output.mad}
+        fi
+        """
 
 
 # Compute MAD score thresholds
