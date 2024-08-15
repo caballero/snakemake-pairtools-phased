@@ -360,7 +360,7 @@ rule diagnostic_plot:
         plot = "07_HiC_matrices/QCplots/{sample}.{ref}.{phasetype}.diagnostic_plot.pdf",
         mad = "07_HiC_matrices/QCplots/{sample}.{ref}.{phasetype}.mad_threshold.out"
     params:
-        chr = lambda wildcards: " --chromosomes " + chromosomes if config['chromosomes'] else ""
+        chr = lambda wildcards: " --chromosomes " + config['chromosomes'] if config['chromosomes'] else ""
     shell:
         """
         if [[ {input.cool} =~ "unphased" ]]
