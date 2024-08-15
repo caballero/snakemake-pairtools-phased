@@ -42,6 +42,13 @@ def ret_pair(wildcards):
     else:
         return f"04_pairing/{wildcards.sample}.{wildcards.ref}.pairs.gz"
 
+def ret_respair(wildcards):
+    if config['mode'] == 'allelic':
+        # Phased setting
+        return f"04_pairing/{wildcards.sample}.{wildcards.ref}.phased.pairs.gz"
+    else:
+        return f"04_pairing/{wildcards.sample}.{wildcards.ref}.pairs.gz"
+
 
 
 # before running the process
@@ -262,8 +269,8 @@ rule pairtools_filter_phased:
     input:
         pairs = "04_pairing/{sample}.{ref}.pairs.dedup.gz"
     output:
-        stats = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.stats",
-        pairs = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.gz"
+        stats = "05_pair_phase/{sample}.{ref}.{phasetype}.pairs.stats",
+        pairs = "05_pair_phase/{sample}.{ref}.{phasetype}.pairs.gz"
     params:
         filterparam = lambda wildcards: PHASEDIC[wildcards.phasetype]
     resources:
@@ -278,43 +285,41 @@ rule pairtools_filter_phased:
         pairtools stats {output.pairs} -o {output.stats}
         """
 
-rule pairix_index:
-    input:
-        pairs = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.gz",
-    output:
-        index = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.gz.px2"
-    threads: 1
-    shell:
-        """
-        pairix {input.pairs}
-        """
-
 rule cooler_convert:
     input:
-        pairs = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.gz",
-        pairidx = "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.gz.px2",
-        chromsize = "02_bwa_index/{ref}.chromsizes"
+        pairs = "05_pair_phase/{sample}.{ref}.{phasetype}.pairs.gz",
     output:
-        cool = "07_cooler/{sample}.{ref}.{phasetype}.cool"
+        cool = "06_cooler/{sample}.{ref}.{phasetype}.cool"
     threads: 12
     params:
         binsize = config['binsize']
+        cooler = "-c1 2 -p1 3 -c2 4 -p2 5"
     shell:
         """
-        cooler cload pairix -p {threads} {input.chromsize}:{params.binsize} {input.pairs} {output.cool}
+        if [[ {input.pairs} =~ "unphased" ]]
+        then
+            touch {output.cool}
+        else
+            cooler cload pairs {params.cooler} -p {threads} {input.chromsize}:{params.binsize} {input.pairs} {output.cool}
+        fi
         """
 
 rule cooler_zoom:
     input:
-        cool = "07_cooler/{sample}.{ref}.{phasetype}.cool"
+        cool = "06_cooler/{sample}.{ref}.{phasetype}.cool"
     output:
-        mcoool = "07_cooler/{sample}.{ref}.{phasetype}.mcool"
+        mcoool = "06_cooler/{sample}.{ref}.{phasetype}.mcool"
     threads: 12
     params:
         param = "--balance"
     shell:
         """
-        cooler zoomify {params.param} -p {threads} {input.cool}
+        if [[ {input.cool} =~ "unphased" ]]
+        then
+            touch {output.mcool}
+        else
+            cooler zoomify {params.param} -p {threads} {input.cool}
+        fi
         """
 
 
