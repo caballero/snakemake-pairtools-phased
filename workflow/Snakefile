@@ -292,7 +292,7 @@ rule cooler_convert:
         cool = "06_cooler/{sample}.{ref}.{phasetype}.cool"
     threads: 12
     params:
-        binsize = config['binsize']
+        binsize = config['binsize'],
         cooler = "-c1 2 -p1 3 -c2 4 -p2 5"
     shell:
         """
