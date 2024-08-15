@@ -318,7 +318,7 @@ rule cooler_zoom:
     input:
         cool = "06_cooler/{sample}.{ref}.{phasetype}.cool"
     output:
-        mcoool = "06_cooler/{sample}.{ref}.{phasetype}.mcool"
+        mcool = "06_cooler/{sample}.{ref}.{phasetype}.mcool"
     threads: 1
     params:
         param = "--balance"
