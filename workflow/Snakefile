@@ -319,7 +319,7 @@ rule cooler_zoom:
         cool = "06_cooler/{sample}.{ref}.{phasetype}.cool"
     output:
         mcoool = "06_cooler/{sample}.{ref}.{phasetype}.mcool"
-    threads: 12
+    threads: 1
     params:
         param = "--balance"
     shell:
@@ -328,7 +328,7 @@ rule cooler_zoom:
         then
             touch {output.mcool}
         else
-            cooler zoomify {params.param} -p {threads} {input.cool}
+            cooler zoomify {params.param} {input.cool}
         fi
         """
 
