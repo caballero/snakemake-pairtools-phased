@@ -297,6 +297,7 @@ rule pairtools_filter_phased:
 rule cooler_convert:
     input:
         pairs = "05_pair_phase/{sample}.{ref}.{phasetype}.pairs.gz",
+        chromsize = config['genome'] + ".chromsize"
     output:
         cool = "06_cooler/{sample}.{ref}.{phasetype}.cool"
     threads: 12
@@ -360,7 +361,7 @@ rule diagnostic_plot:
         plot = "07_HiC_matrices/QCplots/{sample}.{ref}.{phasetype}.diagnostic_plot.pdf",
         mad = "07_HiC_matrices/QCplots/{sample}.{ref}.{phasetype}.mad_threshold.out"
     params:
-        chr = lambda wildcards: " --chromosomes " + config['chromosomes'] if config['chromosomes'] else ""
+        chr = lambda wildcards: "--chromosomes " + config['chromosomes'] if config['chromosomes'] else ""
     shell:
         """
         if [[ {input.cool} =~ "unphased" ]]
