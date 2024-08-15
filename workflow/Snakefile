@@ -300,7 +300,7 @@ rule cooler_convert:
         chromsize = config['genome'] + ".chromsize"
     output:
         cool = "06_cooler/{sample}.{ref}.{phasetype}.cool"
-    threads: 12
+    threads: 1
     params:
         binsize = config['binsize'],
         cooler = "-c1 2 -p1 3 -c2 4 -p2 5"
@@ -310,7 +310,7 @@ rule cooler_convert:
         then
             touch {output.cool}
         else
-            cooler cload pairs {params.cooler} -p {threads} {input.chromsize}:{params.binsize} {input.pairs} {output.cool}
+            cooler cload pairs {params.cooler} {input.chromsize}:{params.binsize} {input.pairs} {output.cool}
         fi
         """
 
