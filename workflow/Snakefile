@@ -346,10 +346,10 @@ rule cooler_zoom:
 ## diagnostic plots
 rule diagnostic_plot:
     input:
-        cool = "07_cooler/{sample}.{ref}.{phasetype}.cool"
+        cool = "06_cooler/{sample}.{ref}.{phasetype}.cool"
     output:
-        plot = "08_HiC_matrices/QCplots/{sample}.{ref}.{phasetype}.diagnostic_plot.pdf",
-        mad = "08_HiC_matrices/QCplots/{sample}.{ref}.{phasetype}.mad_threshold.out"
+        plot = "07_HiC_matrices/QCplots/{sample}.{ref}.{phasetype}.diagnostic_plot.pdf",
+        mad = "07_HiC_matrices/QCplots/{sample}.{ref}.{phasetype}.mad_threshold.out"
     params:
         chr = lambda wildcards: " --chromosomes " + chromosomes if config['chromosomes'] else ""
     shell:
@@ -427,21 +427,21 @@ rule diagnostic_plot:
 
 rule multiqc:
     input:
-        stats = expand(
+        dedup_stats = expand(
             "04_pairing/{sample}.{ref}.pairs.dedup.stats",
             sample=SAMPLES,
             ref=REF
         ),
-        phasedstats = expand(
-            "05_phase_stats/{sample}.{ref}.{phasetype}.pairs.stats",
+        phase_stats = expand(
+            "05_pair_phase/{sample}.{ref}.{phasetype}.pairs.stats",
             sample=SAMPLES,
             ref=REF,
             phasetype=PHASEDIC.keys()
         )
     output:
-        html = "09_multiqc/multiqc_report.html"
+        html = "99_multiqc/multiqc_report.html"
     params:
-        odir = "09_multiqc"
+        odir = "99_multiqc"
     threads: 1
     shell:
         """
