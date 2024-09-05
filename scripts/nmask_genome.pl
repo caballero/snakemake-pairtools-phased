@@ -69,6 +69,9 @@ while (<$vcfh>) {
     } elsif ($g1 =~ m|1/1| and $g2 =~ m|0/0|) {
         $s1 = $alt;
         $s2 = $ref;
+    } elsif ($g1 =~ m|1/1| and $g2 =~ m|1/1|) {
+        $s1 = $alt;
+        $s2 = $alt;
     } else {
         warn "Unsupported genotype: $_\n";
         next;
