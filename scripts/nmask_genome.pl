@@ -90,7 +90,7 @@ warn "writing n-masked genome to $out\n";
 open my $outh, '>', $out or die "Could not open $out: $!\n";
 for my $chr (sort keys %genome) {
     my $id = $ids{$chr};
-    print $outh ">$id\n";
+    print $outh "$id\n";
     while ($genome{$chr}) {
         print $outh substr($genome{$chr}, 0, 80);
         print $outh "\n";
