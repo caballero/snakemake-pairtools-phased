@@ -15,7 +15,13 @@ warn "loading genome from $ref\n";
 my %genome;
 my %ids;
 my $chr_cnt = 0;
-open my $refh, '<', $ref or die "Could not open $ref: $!\n";
+my $refh;
+
+if ($ref =~ /\.gz$/) { 
+    open $refh, '-|', "zcat $ref" or die "Could not open $ref: $!\n" 
+} else { 
+    open $refh, '<', $ref or die "Could not open $ref: $!\n";
+}
 while (<$refh>) {
     chomp;
     if (/^>(\w+)/) {
@@ -33,8 +39,14 @@ warn "found $chr_cnt chromosomes\n";
 warn "loading snps from $vcf\n";
 my %snps;
 my $snp_num = 0;
-open my $snph, '>', $snp or die "Could not open $snp: $!\n";
-open my $vcfh, '<', $vcf or die "Could not open $vcf: $!\n";
+my $vcfh;
+my $snph;
+if ($vcf =~ /\.gz$/) {
+    open $vcfh, '-|', "zcat $vcf" or die "Could not open $vcf: $!\n";
+} else {
+    open $vcfh, '<', $vcf or die "Could not open $vcf: $!\n";
+}
+open $snph, '>', $snp or die "Could not open $snp: $!\n";
 
 print join "\t", "ID", "Chr", "Position", "SNP value", "Ref/SNP\n";
 while (<$vcfh>) {
