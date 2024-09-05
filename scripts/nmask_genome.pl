@@ -48,7 +48,7 @@ if ($vcf =~ /\.gz$/) {
 }
 open $snph, '>', $snp or die "Could not open $snp: $!\n";
 
-print join "\t", "ID", "Chr", "Position", "SNP value", "Ref/SNP\n";
+print $snph join "\t", "ID", "Chr", "Position", "SNP value", "Ref/SNP\n";
 while (<$vcfh>) {
     next if /^#/;
     chomp;
