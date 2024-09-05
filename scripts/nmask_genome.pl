@@ -103,7 +103,7 @@ warn "done\n";
 # Replace the reference base at the given position with 'N' if it matches the given reference base.
 sub maskGenome {
     my ($chr, $pos, $ref) = @_;
-    my $obs = substr($genome{$chr}, $pos - 1, 1);
+    my $obs = uc(substr($genome{$chr}, $pos - 1, 1));
     if ($obs eq $ref) {
         substr($genome{$chr}, $pos - 1, 1) = 'N';
     }
