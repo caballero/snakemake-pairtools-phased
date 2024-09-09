@@ -206,7 +206,7 @@ rule pairtools_parse:
     output:
         pairs = "04_pairing/{sample}.{ref}.pairs.gz"
     params:
-        minmapq = 40,
+        minmapq = 0,
         cols = lambda wildcards: '--add-columns XB,AS,XS' if config['mode'] == 'allelic' else ''
     #threads: 12
     shell:
