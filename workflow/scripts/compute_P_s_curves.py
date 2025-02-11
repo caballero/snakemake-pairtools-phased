@@ -25,7 +25,7 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--resolution", type=int, help=f"Base resolution, default={resolution}", default=resolution)
     parser.add_argument("-m", "--mcool", type=str, help="Path to mCool file", required=True)
     parser.add_argument("-o", "--output", type=str, help="Path to output file", required=True)
-    parser.add_argument("-t", "--threads", type=int, help="Number of threads, default={threads}", default=threads)
+    parser.add_argument("-t", "--threads", type=int, help=f"Number of threads, default={threads}", default=threads)
     parser.add_argument("-s", "--chromsizes", type=str, help="Path to chromomal sizes file", required=True)
     parser.add_argument("-c", "--chroms", type=str, help="Comma separated list of chromosomes", required=True)
     args = parser.parse_args()
